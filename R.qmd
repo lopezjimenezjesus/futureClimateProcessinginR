@@ -29,18 +29,23 @@ here::i_am("R.qmd")
 
 ```
 
-## Descargar de datos
+## Datos climáticos futuros
 
-Los datos climáticos futuros están disponibles en el sitio web de [wordclim](https://www.worldclim.org/data/cmip6/cmip6_clim30s.html).
+Considerando el total de modelos disponibles, 4 escenarios socioeconómicos, 4 periodos de tiempo y 4 variables climáticas
 
-```{r}
-url <- "https://www.worldclim.org/data/cmip6/cmip6_clim30s.html"
-html <- getURL(url)
-table_list <- readHTMLTable(html)
-names(table_list)
-```
+## Descarga de datos
 
-En primer lugar descargamos los datos de clima futuros para los periodos
+Los datos climáticos futuros están disponibles en el portal web de [wordclim](https://www.worldclim.org/data/cmip6/cmip6_clim30s.html).
+
+La estructura general de los archivos es la siguiente:
+
+wordclim version + climate variable + model + ssp + period + numero de tesela
+
+Por ejemplo:
+
+wc2.1_30s_tmin_CNRM-CM6-1_ssp126_2021-2040_tile-18.tif
+
+En primer lugar descargamos los datos de clima futuros para 1 solo ejemplo, a modo de test:
 
 ```{r}
 
@@ -49,10 +54,10 @@ En primer lugar descargamos los datos de clima futuros para los periodos
 model <- "CNRM-CM6-1"
 ssp <-  "126"
 time <- "2021-2040"
-climatic_variable <- "tmin"
+climatic_variable <- "bioc"
 res <- 2.5
-lon <- 39.2 
-lat <- -6.15
+lon <- -6.15
+lat <- 39.2 
 path <-  here("data", "cmip6", "misc")
 
 wc_future <- geodata::cmip6_tile(lon = lon, lat = lat,
@@ -67,18 +72,18 @@ wc_future <- geodata::cmip6_tile(lon = lon, lat = lat,
 plot(wc_future)
 ```
 
+Para descargar los datos correspondientes a todos los escenarios posibles para la región de interés definimos una función y las variables necesarias:
+
 ```{r}
 
 models <- c("ACCESS-CM2", "ACCESS-ESM1-5", "AWI-CM-1-1-MR", "BCC-CSM2-MR", "CanESM5", "CanESM5-CanOE", "CMCC-ESM2", "CNRM-CM6-1", "CNRM-CM6-1-HR", "CNRM-ESM2-1", "EC-Earth3-Veg", "EC-Earth3-Veg-LR", "FIO-ESM-2-0", "GFDL-ESM4", "GISS-E2-1-G", "GISS-E2-1-H", "HadGEM3-GC31-LL", "INM-CM4-8", "INM-CM5-0", "IPSL-CM6A-LR", "MIROC-ES2L", "MIROC6", "MPI-ESM1-2-HR", "MPI-ESM1-2-LR", "MRI-ESM2-0", "UKESM1-0-LL")
-
-models_text <- c("CNRM-CM6-1")
-
 ssp <-  c("126", "245", "370","585")
 time <- c("2021-2040", "2041-2060", "2061-2080")
-variables <- c("tmin", "tmax", "tavg", "prec","bioc")
+variables <- "bioc"
+
 res <- 2.5
-lon <- 39.2 
-lat <- -6.15
+lat <- 39.2 
+lon <- -6.15
 
 path <-  here("data", "cmip6")
 
@@ -90,12 +95,3 @@ download_CMIP6_ext <- function(models, ssp, time, variables, res, lon, lat, path
 
 
 ```
-
-You can add options to executable code like this
-
-```{r}
-#| echo: false
-2 * 2
-```
-
-The `echo: false` option disables the printing of code (only output is displayed).
