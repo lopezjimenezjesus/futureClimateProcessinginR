@@ -1,0 +1,101 @@
+---
+title: "Modelos de cambio climático"
+author: "Jesús Jiménez López"
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+ docx:
+    toc: true
+    number-sections: true
+    highlight-style: github
+editor: visual
+---
+
+## Introducción
+
+Este documento describe el procedimiento seguido para obtener un promedio de los datos climáticos futuros para la CCA de Extremadura. A partir de la combinación de una selección de modelos climáticos globales (GCMs) y trayectorias socioeconómicas (SSPs 126, 245, 370 y585) de la base de datos de Worldclim se derivaron 16 escenarios climáticos para los periodos comprendidos entre 2021 y 2100, en intervalos de 20 años. Los resultados obtenidos permiten generar modelos de ideoneidad de especies de interés.
+
+```{r setup}
+
+library(geodata)
+library(biomod2)
+library(XML)
+library(RCurl)
+library(here)
+
+here::i_am("R.qmd")
+
+```
+
+## Descargar de datos
+
+Los datos climáticos futuros están disponibles en el sitio web de [wordclim](https://www.worldclim.org/data/cmip6/cmip6_clim30s.html).
+
+```{r}
+url <- "https://www.worldclim.org/data/cmip6/cmip6_clim30s.html"
+html <- getURL(url)
+table_list <- readHTMLTable(html)
+names(table_list)
+```
+
+En primer lugar descargamos los datos de clima futuros para los periodos
+
+```{r}
+
+# Test
+
+model <- "CNRM-CM6-1"
+ssp <-  "126"
+time <- "2021-2040"
+climatic_variable <- "tmin"
+res <- 2.5
+lon <- 39.2 
+lat <- -6.15
+path <-  here("data", "cmip6", "misc")
+
+wc_future <- geodata::cmip6_tile(lon = lon, lat = lat,
+                                 model = model, ssp = ssp, time = time,
+                                 var = climatic_variable, path = path)
+
+
+```
+
+```{r}
+
+plot(wc_future)
+```
+
+```{r}
+
+models <- c("ACCESS-CM2", "ACCESS-ESM1-5", "AWI-CM-1-1-MR", "BCC-CSM2-MR", "CanESM5", "CanESM5-CanOE", "CMCC-ESM2", "CNRM-CM6-1", "CNRM-CM6-1-HR", "CNRM-ESM2-1", "EC-Earth3-Veg", "EC-Earth3-Veg-LR", "FIO-ESM-2-0", "GFDL-ESM4", "GISS-E2-1-G", "GISS-E2-1-H", "HadGEM3-GC31-LL", "INM-CM4-8", "INM-CM5-0", "IPSL-CM6A-LR", "MIROC-ES2L", "MIROC6", "MPI-ESM1-2-HR", "MPI-ESM1-2-LR", "MRI-ESM2-0", "UKESM1-0-LL")
+
+models_text <- c("CNRM-CM6-1")
+
+ssp <-  c("126", "245", "370","585")
+time <- c("2021-2040", "2041-2060", "2061-2080")
+variables <- c("tmin", "tmax", "tavg", "prec","bioc")
+res <- 2.5
+lon <- 39.2 
+lat <- -6.15
+
+path <-  here("data", "cmip6")
+
+download_CMIP6_ext <- function(models, ssp, time, variables, res, lon, lat, path) {
+  
+  wc_future <- geodata::cmip6_tile()
+  
+}
+
+
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
