@@ -76,6 +76,31 @@ Para descargar los datos correspondientes a todos los escenarios posibles para l
 
 ```{r}
 
+
+
+download_CMIP6_ext <- function(models, ssp, time, res, lon, lat, path) {
+  
+  for (period in time) {
+      for (scenario in ssp) {
+        path = here(path, period, scenario)
+        dir.create(path,  recursive = TRUE)
+        for (model in models) {
+           geodata::cmip6_tile(lon = lon, lat = lat,
+                                 model = model, ssp = scenario, time = period,
+                                 var = "bioc" , path = path)
+        }
+      }
+  }
+  
+}
+
+
+```
+
+Test function
+
+```{r}
+
 models <- c("ACCESS-CM2", "ACCESS-ESM1-5", "AWI-CM-1-1-MR", "BCC-CSM2-MR", "CanESM5", "CanESM5-CanOE", "CMCC-ESM2", "CNRM-CM6-1", "CNRM-CM6-1-HR", "CNRM-ESM2-1", "EC-Earth3-Veg", "EC-Earth3-Veg-LR", "FIO-ESM-2-0", "GFDL-ESM4", "GISS-E2-1-G", "GISS-E2-1-H", "HadGEM3-GC31-LL", "INM-CM4-8", "INM-CM5-0", "IPSL-CM6A-LR", "MIROC-ES2L", "MIROC6", "MPI-ESM1-2-HR", "MPI-ESM1-2-LR", "MRI-ESM2-0", "UKESM1-0-LL")
 ssp <-  c("126", "245", "370","585")
 time <- c("2021-2040", "2041-2060", "2061-2080")
@@ -87,23 +112,8 @@ lon <- -6.15
 
 path <-  here("data", "cmip6")
 
-download_CMIP6_ext <- function(models, ssp, time, res, lon, lat, path) {
-  
-  for (period in time) {
-      for (scenario in ssp) {
-        path = here(path, time, scenario)
-        dir.create(path)
-        for (model in models) {
-           wc_future <- geodata::cmip6_tile(lon = lon, lat = lat,
-                                 model = model, ssp = scenario, time = period,
-                                 var = "bioc" , path = path)
-        }
-      }
-  }
-  
-  wc_future <- geodata::cmip6_tile()
-  
-}
+download_CMIP6_ext(models=models, ssp =ssp, 
+                   time = time, res = res, lon=lon, lat=lat, path=path)
 
 
 ```
