@@ -179,9 +179,11 @@ reduceBioExt <-  function(tiff_file_list, area_of_interest) {
     
     x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n))
     
-    xx <-  terra::app(rast(x), mean) # es necesario este paso?
+    xx <-  terra::app(rast(x), mean)
     
-    z = exact_extract( raster::raster(xx), y , fun = "mean")
+    
+    
+    z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
     
     col_name = paste0("band_", n)
     df <- data.frame(col_name=z)
