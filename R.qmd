@@ -1,6 +1,7 @@
 ---
 title: "Modelos de cambio climático"
 author: "Jesús Jiménez López"
+lang: es
 format:
   pdf:
     toc: true
@@ -10,7 +11,10 @@ format:
     toc: true
     number-sections: true
     highlight-style: github
+#bibliography: references.bib
 editor: visual
+execute: 
+  enabled: false
 ---
 
 ## Introducción
@@ -25,6 +29,9 @@ library(XML)
 library(RCurl)
 library(here)
 library(tools)
+library(raster)
+library(sf)
+library(exactextractr)
 
 here::i_am("R.qmd")
 
@@ -32,15 +39,21 @@ here::i_am("R.qmd")
 
 ## Metodología
 
-A partir de la combinación de una selección de modelos climáticos globales (GCMs) y trayectorias socioeconómicas (SSPs 126, 245, 370 y585) de la base de datos de Worldclim se derivaron 16 escenarios climáticos para los periodos comprendidos entre 2021 y 2100, en intervalos de 20 años. Los resultados obtenidos permiten generar modelos de idoneidad de especies proyectados en el futuro.
+A partir de la combinación de una selección de modelos climáticos globales (GCMs) promediados y trayectorias socioeconómicas (SSPs 126, 245, 370 y585) de la base de datos de Worldclim se derivaron 16 escenarios bioclimáticos para los periodos comprendidos entre 2021 y 2100, en intervalos de 20 años. Los resultados obtenidos permiten generar modelos de idoneidad de especies proyectados en el futuro.
 
 ### Datos climáticos futuros
 
-Los datos climáticos futuros están disponibles en el portal web de [wordclim](https://www.worldclim.org/data/cmip6/cmip6_clim30s.html). Estos datos fueron generados a partir de la linea base de datos climáticos correspondientes al WorldClim v2.1. Se procesaron valores mensuales de temperatura mínima, temperatura máxima y precipitación para 23 modelos climáticos globales (GCM) y para cuatro rutas socioeconómicas compartidas (SSP): 126, 245, 370 y 585. Los valores mensuales fueron promedios durante períodos de 20 años (2021-2040, 241-2060, 2061-2080, 2081-2100). Están disponibles las siguientes resoluciones espaciales (expresadas como minutos de un grado de longitud y latitud): 10 minutos, 5 minutos, 2,5 minutos y 30 segundos.
+Las predicciones climáticas fueron generadas a partir de la linea base de datos climáticos WorldClim v2.1. Se procesaron valores mensuales de temperatura mínima, temperatura máxima , precipitación y variables bioclimáticas para 23 modelos climáticos globales (GCM) y para cuatro rutas socioeconómicas compartidas (SSP): 126, 245, 370 y 585. Los valores mensuales fueron promedios durante períodos de 20 años (2021-2040, 241-2060, 2061-2080, 2081-2100). Están disponibles las siguientes resoluciones espaciales (expresadas como minutos de un grado de longitud y latitud): 10 minutos, 5 minutos, 2,5 minutos y 30 segundos.
+
+En este caso solo nos interesan las variables bioclimáticas a una resolución de 30 segundos.
+
+### Variables bioclimáticas
+
+Las variables bioclimáticas se derivan a partir de la temperatura mensual y valores de precipitación con el objetivo de generar variables con un significado biológico mayor. Estos datos se utilizan a menudo para desarrollar modelos de distribución de especies. Las variables bioclimáticas representan tendencias anuales (por ejemplo, temperatura media anual, precipitación), estacionalidad (p. ej., rango anual de temperatura y precipitación) y factores ambientales extremos o limitantes (p. ej., la temperatura del mes más frío y el más cálido, y la precipitación del cuartos húmedos y secos).
 
 ### Descarga y procesamiento de datos
 
-La estructura general de los archivos es la siguiente:
+Los datos climáticos futuros están disponibles en el portal web de [wordclim](https://www.worldclim.org/data/cmip6/cmip6_clim30s.html). La estructura general de los archivos es la siguiente:
 
 `(wordclim version + resolution +  variable (tn, tx, pr, bc) + model + ssp + period).tif`
 
@@ -48,13 +61,13 @@ Por ejemplo:
 
 `wc2.1_2.5m_bioc_CanESM5_ssp585_2061-2080.tif`
 
-A continuación definimos una función que permita descargar los datos correspondientes a todos los escenarios posibles para la región de interés.
+A continuación definimos una función que permita descargar los datos correspondientes a todos los escenarios posibles para la región de interés. Esta funcion se presenta en dos variantes: descarga global o por tiles. Para descargar los datos se usan las funciones cmip6_world y cmip6_tile de la libreria geodata en R.
 
 ```{r}
 
-# download cmp5 data 
+# download cmip6 global data 
 
-download_CMIP6_world <- function(models, ssp, time, res, lon, lat, path) {
+download_CMIP6_world <- function(models, ssp, time, res, path) {
   
   for (period in time) {
       for (scenario in ssp) {
@@ -70,10 +83,29 @@ download_CMIP6_world <- function(models, ssp, time, res, lon, lat, path) {
   
 }
 
+# download cmip6 tiles data 
+
+download_CMIP6_tiles <- function(lon, lat, models, ssp, time, res, path) {
+  
+  for (period in time) {
+      for (scenario in ssp) {
+        folder_path = here(path, period, scenario)
+        dir.create(folder_path,  recursive = TRUE)
+        for (model in models) {
+           geodata::cmip6_tile(lon=lon, lat=lat, model = model, ssp = scenario, time = period,
+                                var = "bioc" , path = folder_path, res=res,
+                                overwrite=FALSE)
+        }
+      }
+  }
+  
+}
+
+
 
 ```
 
-Descargamos los datos para los modelos de circulación, periodos y escenarios de interés.
+Descargamos los datos globales para los modelos, periodos y escenarios de interés.
 
 ```{r}
 
@@ -83,7 +115,7 @@ models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1",
             "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
             "MIROC6",  "MRI-ESM2-0")
 ssp <-  c("126", "245", "370","585")
-time <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
+time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
 variables <- "bioc" # currently hardcoded in the function
 res <- 0.5
 path <-  here("data", "cmip6")
@@ -91,8 +123,35 @@ path <-  here("data", "cmip6")
 # execute function
 
 download_CMIP6_world(models=models, ssp =ssp, 
-                   time = time, res = res, path=path)
+                   time = time_periods, res = res, path=path)
 
+
+
+```
+
+Alternativamente, y puesto que cada archivo de datos globales tiene un tamaño de fichero del orden de gigas, podemos descargar las teselas de interes que cubran la CCCAA de Extremadura.
+
+```{r}
+## tiles instead
+
+# tiles here:
+# https://geodata.ucdavis.edu/cmip6/tiles/
+
+# set variables
+
+models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1", 
+            "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
+            "MIROC6",  "MRI-ESM2-0")
+ssp <-  c("126", "245", "370","585")
+time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
+variables <- "bioc" # currently hardcoded in the function
+res <- 0.5
+path <-  here("data", "cmip6")
+lon <- -6.15
+lat <- 39.2
+  
+download_CMIP6_tiles( lon=lon,lat=lat, models=models, ssp =ssp, 
+                 time = time_periods, res = res, path=path)
 ```
 
 Los datos descargados incluyen los siguientes escenarios económicos, periodos, variables y modelos:
@@ -100,7 +159,7 @@ Los datos descargados incluyen los siguientes escenarios económicos, periodos, 
 ```{r}
 
 print(ssp)
-print(time)
+print(time_periods)
 print(variables)
 print(models)
 ```
@@ -109,16 +168,14 @@ Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los
 
 ```{r}
 
-library(raster)
-library(sf)
-library(exactextractr)
-
 reduceBioExt <-  function(tiff_file_list, area_of_interest) {
 
   datalist = vector("list", length = 19)
   y <- area_of_interest
   
   for (n in seq(1:19)) {
+    
+    print(paste("processing band", n, "of a total of 19"))
     
     x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n))
     
@@ -136,7 +193,7 @@ reduceBioExt <-  function(tiff_file_list, area_of_interest) {
   df_bio = do.call(cbind, datalist)
   colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", x)})
   df_bio <- cbind(area_of_interest$ID1KM, df_bio)
-
+  colnames(df_bio)[1] <- "ID1KM"
   return(df_bio)
   
 } 
@@ -145,26 +202,35 @@ reduceBioExt <-  function(tiff_file_list, area_of_interest) {
 
 ```
 
-Ejecutamos la función para todos los escenarios posibles
-
 ```{r}
 
 shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
-
 extremadura <- st_as_sf(vect(shp_path))
+res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process
 
-for (period in time) {
+for (period in time_periods) {
     for (scenario in ssp) {
-      folder_path = here(path, period, scenario, "wc2.1_2.5m")
+      folder_path = here(path, period, scenario, res_folder_to_process)
       tif_files <- list.files(path=folder_path,
                               pattern="\\.tif(f)?$", full.names=TRUE)
+      
+      
+      print(paste("The data folder", folder_path, "contains the following files:"))
+      for (f in tif_files) print(f)
+      
       output_path = here(folder_path, "output")
      
       dir.create(output_path,  recursive = TRUE)
       result <- reduceBioExt(tif_files, extremadura)
-      write.csv(result, file = paste(output_path, "/", "cmip6_", period,"_", scenario, ".csv"))
+      
+      print(paste("Writing file to disk... Output path: ", output_path))
+      write.csv(result, file = paste0(output_path, "/", "cmip6_ext_2_5m_", period,"_", scenario, ".csv"))
       
     }
 }
 
 ```
+
+## Resultado
+
+Para cada combinación de periodos y escenarios socioeconómicos se obtiene un archivo en formato csv con los valores promedios de los modelos climáticos globales (GCMs) para cada una de las 19 bandas que conforman las variables bioclimáticas.
