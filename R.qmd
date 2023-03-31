@@ -277,7 +277,7 @@ here dev: split functions, first export to tiff, then use the tiff to export to 
 
 ```{r}
 
-cropBioExt <-  function(tiff_file_list, crop_area) {
+stack_crop_raster <-  function(tiff_file_list, crop_area) {
 
   datalist = vector("list", length = 19)
 
@@ -298,42 +298,61 @@ cropBioExt <-  function(tiff_file_list, crop_area) {
 } 
 ```
 
+Loop stack_crop_raster
+
 ```{r}
 
+
+# loop over every scenario for the time periods selected
+
+saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext) {
+  for (period in time_periods) {
+    for (scenario in ssp) {
+      folder_path = here(path, period, scenario, res_folder_to_process)
+      tif_files <- list.files(path=folder_path,
+                              pattern="\\.tif(f)?$", full.names=TRUE)
+      print(paste("The data folder", folder_path, "contains the following files:"))
+      
+      for (f in tif_files) print(f) # list files
+      
+      output_path = here(folder_path, "output")
+     
+      dir.create(output_path,  recursive = TRUE)
+      
+      result <- stack_crop_raster(tif_files, ext) # call function
+        
+      print(paste("Writing tiff file to disk... Output path: ", output_path))
+      
+      res_prefix <- gsub(pattern = "\\.", "_", res_folder_to_process)
+      crop_area_prefix <- deparse(substitute(ext)) # change accrodingly
+      
+      terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_", crop_area_prefix, "_", res_prefix, "_period","_", scenario, ".tiff"))
+    }
+  }
+}
+
+
+
+```
+
+```{r}
 # set variables
 
-crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
+path <-  here("data", "cmip6")
+
+ext <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp"))) # better use a 3 character var as it is included in the file
 
 res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
 
 ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
 time_periods <- c("2021-2040") # one by one, overwrite previous
 
-# loop over every scenario for the time periods selected
 
-for (scenario in ssp) {
-  folder_path = here(path, period, scenario, res_folder_to_process)
-  tif_files <- list.files(path=folder_path,
-                          pattern="\\.tif(f)?$", full.names=TRUE)
-  print(paste("The data folder", folder_path, "contains the following files:"))
-  
-  for (f in tif_files) print(f) # list files
-  
-    output_path = here(folder_path, "output")
-   
-    dir.create(output_path,  recursive = TRUE)
-    
-    result <- cropBioExt(tif_files, crop_area) # call function
-      
-    print(paste("Writing tiff file to disk... Output path: ", output_path))
-    terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
-      
-}
-
+saveRasterToDisk(time_periods, ssp, res_folder_to_process, path, ext)
 ```
 
 ```{r}
-reduceBioExtToCSV <- function(raster_file, spatial_grid, id_column_name) {
+reduceExportToCSV <- function(raster_file, spatial_grid, id_column_name) {
 
   result <- exact_extract( raster::stack(foo), spatial_grid , fun = "mean")
   colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", result)})
@@ -355,23 +374,24 @@ ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
 time_periods <- c("2021-2040") # one by one, overwrite previous
 
 # loop over every scenario for the time periods selected
-
-for (scenario in ssp) {
-  folder_path = here(path, period, scenario, res_folder_to_process, "output") # here include output folder 
-  tif_files <- list.files(path=folder_path,
-                          pattern="\\.tif(f)?$", full.names=TRUE) # should be just one tif per folder in this case
-  print(paste("The data folder", folder_path, "contains the following file:"))
-  
-  for (f in tif_files) print(f) # list files
-  
-    output_path = output_path # just lazy
+for (period in time_periods) {
+  for (scenario in ssp) {
+    folder_path = here(path, period, scenario, res_folder_to_process, "output") # here include output folder 
+    tif_files <- list.files(path=folder_path,
+                            pattern="\\.tif(f)?$", full.names=TRUE) # should be just one tif per folder in this case
+    print(paste("The data folder", folder_path, "contains the following file:"))
     
-    result <- reduceBioExtToCSV(tif_files, spatial_grid=extremadura, id_column_name="ID1KM") # call function
-    print(paste("Writing csv file to disk... Output path: ", output_path))
-    write.csv(result,
-              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-                              period,"_", scenario, ".csv"))
+    for (f in tif_files) print(f) # list files
+    
+      output_path = output_path # just lazy
       
+      result <- reduceExportToCSV(tif_files, spatial_grid=extremadura, id_column_name="ID1KM") # call function
+      print(paste("Writing csv file to disk... Output path: ", output_path))
+      write.csv(result,
+                file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+                                period,"_", scenario, ".csv"))
+        
+  }
 }
 ```
 
