@@ -171,7 +171,7 @@ Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los
 
 ```{r}
 
-reduceBioExt <-  function(tiff_file_list, area_of_interest, tiff_ouput=FALSE) {
+reduceBioExt <-  function(tiff_file_list, area_of_interest, crop_area, tiff_ouput=FALSE) {
 
   datalist = vector("list", length = 19)
   y <- area_of_interest
@@ -187,7 +187,7 @@ reduceBioExt <-  function(tiff_file_list, area_of_interest, tiff_ouput=FALSE) {
     
     if(tiff_ouput) {
       # new, in case the raster are required
-      m[[n]] <- xx |> crop(area_of_interest, snap='out') |> mean() |> mask(area_of_interest)
+      m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
     }
 
     z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
@@ -271,6 +271,108 @@ for (scenario in ssp) {
 }
 
 
+```
+
+here dev: split functions, first export to tiff, then use the tiff to export to csv
+
+```{r}
+
+cropBioExt <-  function(tiff_file_list, crop_area) {
+
+  datalist = vector("list", length = 19)
+
+  m <- list()
+  
+  for (n in seq(1:19)) {
+    
+    print(paste("processing band", n, "of a total of 19"))
+    
+    x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
+    xx <-  terra::app(rast(x), mean)
+    m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
+  }
+
+    return(m)
+
+  
+} 
+```
+
+```{r}
+
+# set variables
+
+crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
+
+res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+
+ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
+time_periods <- c("2021-2040") # one by one, overwrite previous
+
+# loop over every scenario for the time periods selected
+
+for (scenario in ssp) {
+  folder_path = here(path, period, scenario, res_folder_to_process)
+  tif_files <- list.files(path=folder_path,
+                          pattern="\\.tif(f)?$", full.names=TRUE)
+  print(paste("The data folder", folder_path, "contains the following files:"))
+  
+  for (f in tif_files) print(f) # list files
+  
+    output_path = here(folder_path, "output")
+   
+    dir.create(output_path,  recursive = TRUE)
+    
+    result <- cropBioExt(tif_files, crop_area) # call function
+      
+    print(paste("Writing tiff file to disk... Output path: ", output_path))
+    terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
+      
+}
+
+```
+
+```{r}
+reduceBioExtToCSV <- function(raster_file, spatial_grid, id_column_name) {
+
+  result <- exact_extract( raster::stack(foo), spatial_grid , fun = "mean")
+  colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", result)})
+  result <- cbind(spatial_grid[[id_column_name]], result)
+  colnames(result)[1] <-id_column_name
+  return(result)
+  
+} 
+
+```
+
+```{r}
+
+shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
+extremadura <- st_as_sf(vect(shp_path))
+res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+
+ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
+time_periods <- c("2021-2040") # one by one, overwrite previous
+
+# loop over every scenario for the time periods selected
+
+for (scenario in ssp) {
+  folder_path = here(path, period, scenario, res_folder_to_process, "output") # here include output folder 
+  tif_files <- list.files(path=folder_path,
+                          pattern="\\.tif(f)?$", full.names=TRUE) # should be just one tif per folder in this case
+  print(paste("The data folder", folder_path, "contains the following file:"))
+  
+  for (f in tif_files) print(f) # list files
+  
+    output_path = output_path # just lazy
+    
+    result <- reduceBioExtToCSV(tif_files, spatial_grid=extremadura, id_column_name="ID1KM") # call function
+    print(paste("Writing csv file to disk... Output path: ", output_path))
+    write.csv(result,
+              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+                              period,"_", scenario, ".csv"))
+      
+}
 ```
 
 ## Resultado
