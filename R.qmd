@@ -32,6 +32,7 @@ library(tools)
 library(raster)
 library(sf)
 library(exactextractr)
+library(gsubfn)
 
 here::i_am("R.qmd")
 
@@ -109,7 +110,7 @@ Descargamos los datos globales para los modelos, periodos y escenarios de inter�
 
 ```{r}
 
-# set variables
+# set variables 
 
 models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1", 
             "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
@@ -154,6 +155,8 @@ download_CMIP6_tiles( lon=lon,lat=lat, models=models, ssp =ssp,
                  time = time_periods, res = res, path=path)
 ```
 
+Sin embargo no todas las teselas están disponibles, por lo que será necesario trabajar con datos globales.
+
 Los datos descargados incluyen los siguientes escenarios económicos, periodos, variables y modelos:
 
 ```{r}
@@ -168,21 +171,25 @@ Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los
 
 ```{r}
 
-reduceBioExt <-  function(tiff_file_list, area_of_interest) {
+reduceBioExt <-  function(tiff_file_list, area_of_interest, tiff_ouput=FALSE) {
 
   datalist = vector("list", length = 19)
   y <- area_of_interest
+  m <- list()
   
   for (n in seq(1:19)) {
     
     print(paste("processing band", n, "of a total of 19"))
     
-    x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n))
+    x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
     
     xx <-  terra::app(rast(x), mean)
     
-    
-    
+    if(tiff_ouput) {
+      # new, in case the raster are required
+      m[[n]] <- xx |> crop(area_of_interest, snap='out') |> mean() |> mask(area_of_interest)
+    }
+
     z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
     
     col_name = paste0("band_", n)
@@ -196,43 +203,76 @@ reduceBioExt <-  function(tiff_file_list, area_of_interest) {
   colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", x)})
   df_bio <- cbind(area_of_interest$ID1KM, df_bio)
   colnames(df_bio)[1] <- "ID1KM"
-  return(df_bio)
+  
+  if(tiff_ouput) {
+    names(m) <- paste0("wc2_", seq(1, 19))
+    return(list(df_bio, m)) # return a list wit both results (require gsubfn package)
+  } else {
+    return(df_bio)
+  }
+
   
 } 
-
-
 
 ```
 
 ```{r}
 
+# set variables
+
 shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
 extremadura <- st_as_sf(vect(shp_path))
-res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process
 
-for (period in time_periods) {
-    for (scenario in ssp) {
-      folder_path = here(path, period, scenario, res_folder_to_process)
-      tif_files <- list.files(path=folder_path,
-                              pattern="\\.tif(f)?$", full.names=TRUE)
-      
-      
-      print(paste("The data folder", folder_path, "contains the following files:"))
-      for (f in tif_files) print(f)
-      
-      output_path = here(folder_path, "output")
-     
-      dir.create(output_path,  recursive = TRUE)
+crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
+
+res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+
+tiff_output <- TRUE # TRUE if tiff files are required instead of just csv
+ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
+time_periods <- c("2021-2040") # one by one, overwrite previous
+
+# loop over every scenario for the time periods selected
+
+for (scenario in ssp) {
+  folder_path = here(path, period, scenario, res_folder_to_process)
+  tif_files <- list.files(path=folder_path,
+                          pattern="\\.tif(f)?$", full.names=TRUE)
+  print(paste("The data folder", folder_path, "contains the following files:"))
+  
+  for (f in tif_files) print(f)
+  
+  output_path = here(folder_path, "output")
+ 
+  dir.create(output_path,  recursive = TRUE)
+  
+  if(tiff_output) {
+          
+    list[result, result_tif] <- reduceBioExt(tif_files, 
+                                             extremadura, 
+                                             tiff_ouput=TRUE) # return 2 values
+    
+    print(paste("Writing csv file to disk... Output path: ", output_path))
+    write.csv(result,
+              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+                            period,"_", scenario, ".csv"))
+    
+    print(paste("Writing tiff file to disk... Output path: ", output_path))
+    terra::writeRaster(x =terra::rast(result_tif),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
+    
+  }  else {
+    
       result <- reduceBioExt(tif_files, extremadura)
-      
-      print(paste("Writing file to disk... Output path: ", output_path))
-      write.csv(result, file = paste0(output_path, "/", "cmip6_ext_2_5m_", period,"_", scenario, ".csv"))
-      
-    }
+      print(paste("Writing csv file to disk... Output path: ", output_path))
+      write.csv(result,
+                file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+                              period,"_", scenario, ".csv"))
+  }
+
 }
+
 
 ```
 
 ## Resultado
 
-Para cada combinación de periodos y escenarios socioeconómicos se obtiene un archivo en formato csv con los valores promedios de los modelos climáticos globales (GCMs) para cada una de las 19 bandas que conforman las variables bioclimáticas.
+Para cada combinación de periodos y escenarios socioeconómicos se obtiene un archivo en formato csv con los valores promedios de los modelos climáticos globales (GCMs) para cada una de las 19 bandas que conforman las variables bioclimáticas. Además se incluye la información en formato raster para la CCAA de Extremadura.
