@@ -38,6 +38,12 @@ here::i_am("R.qmd")
 
 ```
 
+```{r include=FALSE echo=FALSE}
+knitr::opts_chunk$set(
+  comment = "#>", echo = FALSE, fig.width = 6
+)
+```
+
 ## Metodología
 
 A partir de la combinación de una selección de modelos climáticos globales (GCMs) promediados y trayectorias socioeconómicas (SSPs 126, 245, 370 y585) de la base de datos de Worldclim se derivaron 16 escenarios bioclimáticos para los periodos comprendidos entre 2021 y 2100, en intervalos de 20 años. Los resultados obtenidos permiten generar modelos de idoneidad de especies proyectados en el futuro.
@@ -61,6 +67,30 @@ Los datos climáticos futuros están disponibles en el portal web de [wordclim](
 Por ejemplo:
 
 `wc2.1_2.5m_bioc_CanESM5_ssp585_2061-2080.tif`
+
+```{r}
+
+# set variables
+
+models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1", 
+            "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
+            "MIROC6",  "MRI-ESM2-0")
+ssp <-  c("126", "245", "370","585")
+time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
+variables <- "bioc" # currently hardcoded in the function
+res <- 0.5
+path <-  here("data", "cmip6")
+
+
+lon <- -6.15
+lat <- 39.2
+
+ext1KM <-  st_as_sf(vect(here('data', 'input', "cUTM1KMExt_eps4326.shp"))) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
+res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+crop_area_prefix <- deparse(substitute(ext1KM)) # change accrodingly
+id_column_name <- paste0("ID", substr(crop_area_prefix, 4, nchar(crop_area_prefix)))
+
+```
 
 A continuación definimos una función que permita descargar los datos correspondientes a todos los escenarios posibles para la región de interés. Esta funcion se presenta en dos variantes: descarga global o por tiles. Para descargar los datos se usan las funciones cmip6_world y cmip6_tile de la libreria geodata en R.
 
@@ -102,62 +132,33 @@ download_CMIP6_tiles <- function(lon, lat, models, ssp, time, res, path) {
   
 }
 
-
-
 ```
 
 Descargamos los datos globales para los modelos, periodos y escenarios de interés.
 
 ```{r}
 
-# set variables 
-
-models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1", 
-            "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
-            "MIROC6",  "MRI-ESM2-0")
-ssp <-  c("126", "245", "370","585")
-time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
-variables <- "bioc" # currently hardcoded in the function
-res <- 0.5
-path <-  here("data", "cmip6")
-
 # execute function
 
 download_CMIP6_world(models=models, ssp =ssp, 
                    time = time_periods, res = res, path=path)
-
-
 
 ```
 
 Alternativamente, y puesto que cada archivo de datos globales tiene un tamaño de fichero del orden de gigas, podemos descargar las teselas de interes que cubran la CCCAA de Extremadura.
 
 ```{r}
+
 ## tiles instead
 
 # tiles here:
 # https://geodata.ucdavis.edu/cmip6/tiles/
 
-# set variables
-
-models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1", 
-            "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
-            "MIROC6",  "MRI-ESM2-0")
-ssp <-  c("126", "245", "370","585")
-time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
-variables <- "bioc" # currently hardcoded in the function
-res <- 0.5
-path <-  here("data", "cmip6")
-lon <- -6.15
-lat <- 39.2
-  
 download_CMIP6_tiles( lon=lon,lat=lat, models=models, ssp =ssp, 
                  time = time_periods, res = res, path=path)
 ```
 
-Sin embargo no todas las teselas están disponibles, por lo que será necesario trabajar con datos globales.
-
-Los datos descargados incluyen los siguientes escenarios económicos, periodos, variables y modelos:
+Sin embargo no todas las teselas están disponibles, por lo que será necesario trabajar con datos globales. Los datos descargados incluyen los siguientes escenarios económicos, periodos, variables y modelos:
 
 ```{r}
 
@@ -168,114 +169,6 @@ print(models)
 ```
 
 Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los datos.
-
-```{r}
-
-# Do not use, better to export first to tiff and then to csv (see next function)
-
-# reduceBioExt <-  function(tiff_file_list, area_of_interest, crop_area, tiff_ouput=FALSE) {
-# 
-#   datalist = vector("list", length = 19)
-#   y <- area_of_interest
-#   m <- list()
-#   
-#   for (n in seq(1:19)) {
-#     
-#     print(paste("processing band", n, "of a total of 19"))
-#     
-#     x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
-#     
-#     xx <-  terra::app(rast(x), mean)
-#     
-#     if(tiff_ouput) {
-#       # new, in case the raster are required
-#       m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
-#     }
-# 
-#     z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
-#     
-#     col_name = paste0("band_", n)
-#     df <- data.frame(col_name=z)
-#     
-#     datalist[[n]] = df
-#     
-#   }
-#   
-#   df_bio = do.call(cbind, datalist)
-#   colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", x)})
-#   df_bio <- cbind(area_of_interest$ID1KM, df_bio)
-#   colnames(df_bio)[1] <- "ID1KM"
-#   
-#   if(tiff_ouput) {
-#     names(m) <- paste0("wc2_", seq(1, 19))
-#     return(list(df_bio, m)) # return a list wit both results (require gsubfn package)
-#   } else {
-#     return(df_bio)
-#   }
-# 
-#   
-# } 
-
-```
-
-```{r}
-
-# for above function, do not run
-
-# # set variables
-# 
-# shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
-# extremadura <- st_as_sf(vect(shp_path))
-# 
-# crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
-# 
-# res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-# 
-# tiff_output <- TRUE # TRUE if tiff files are required instead of just csv
-# ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
-# time_periods <- c("2021-2040") # one by one, overwrite previous
-# 
-# # loop over every scenario for the time periods selected
-# 
-# for (scenario in ssp) {
-#   folder_path = here(path, period, scenario, res_folder_to_process)
-#   tif_files <- list.files(path=folder_path,
-#                           pattern="\\.tif(f)?$", full.names=TRUE)
-#   print(paste("The data folder", folder_path, "contains the following files:"))
-#   
-#   for (f in tif_files) print(f)
-#   
-#   output_path = here(folder_path, "output")
-#  
-#   dir.create(output_path,  recursive = TRUE)
-#   
-#   if(tiff_output) {
-#           
-#     list[result, result_tif] <- reduceBioExt(tif_files, 
-#                                              extremadura, 
-#                                              tiff_ouput=TRUE) # return 2 values
-#     
-#     print(paste("Writing csv file to disk... Output path: ", output_path))
-#     write.csv(result,
-#               file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-#                             period,"_", scenario, ".csv"))
-#     
-#     print(paste("Writing tiff file to disk... Output path: ", output_path))
-#     terra::writeRaster(x =terra::rast(result_tif),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
-#     
-#   }  else {
-#     
-#       result <- reduceBioExt(tif_files, extremadura)
-#       print(paste("Writing csv file to disk... Output path: ", output_path))
-#       write.csv(result,
-#                 file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-#                               period,"_", scenario, ".csv"))
-#   }
-# 
-# }
-
-
-```
 
 Definimos una función que permita procesar todos los escenarios posibles. Queremos la media de todas las variables bioclimáticas entre modelos, es decir, la media de la banda 1 para todos los modelos, la media de la banda 2, hasta la banda 19. Finalmente usamos el grid para Extremadura y España (1km y 10km) para extraer la media de los valores obtenidos para esa zona en cada cuadrícula.
 
@@ -298,21 +191,22 @@ stack_crop_raster <-  function(tiff_file_list, crop_area) {
   
   return(m)
   
-  
 }
  
 ```
 
-Guardamos los resultados en formato tiff.
+La funcion anterior devuelve un raster. Definimos otra función para aplicar la función anterior en todas las subcarpetas y guardamos los resultados en formato tiff.
 
 ```{r}
-
 
 # loop over every scenario for the time periods selected
 
 saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext) {
+  
   for (period in time_periods) {
+    
     for (scenario in ssp) {
+      
       folder_path = here(path, period, scenario, res_folder_to_process)
       tif_files <- list.files(path=folder_path,
                               pattern="\\.tif(f)?$", full.names=TRUE)
@@ -332,26 +226,18 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
       
       res_prefix <- gsub(pattern = "\\.", "_", res_folder_to_process)
 
-      
       terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_", crop_area_prefix, "_", res_prefix, "_period","_", scenario, ".tiff"))
+      
     }
+    
   }
+  
 }
-
-
 
 ```
 
 ```{r}
-# set variables
 
-path <-  here("data", "cmip6")
-ext1KM <-  st_as_sf(vect(here('data', 'input', "cUTM1KMExt_eps4326.shp"))) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
-res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
-time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
-
-# run function
 
 saveRasterToDisk(time_periods, ssp, res_folder_to_process, path, ext1KM)
 ```
@@ -374,15 +260,9 @@ reduceExportToCSV <- function(raster_file, spatial_grid, id_column_name) {
 
 ```{r}
 
-# set variables
 
-ext1KM <-  st_as_sf(vect(here('data', 'input', "cUTM1KMExt_eps4326.shp"))) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
-res_folder_to_process <- "wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
-time_periods <- c("2021-2040") # one by one, overwrite previous
-crop_area_prefix <- deparse(substitute(ext1KM)) # change accrodingly
-id_column_name <- paste0("ID", substr(crop_area_prefix, 4, nchar(crop_area_prefix)))
 # loop over every scenario for the time periods selected
+# check spatial grid required before running
 
 for (period in time_periods) {
   for (scenario in ssp) {
@@ -403,8 +283,8 @@ for (period in time_periods) {
     
     output_path = output_path # just lazy
     
-    result <- reduceExportToCSV(tif_files, 
-                                spatial_grid=extremadura, 
+    result <- reduceExportToCSV(tif_files=tif_files, 
+                                spatial_grid=ext1KM, 
                                 id_column_name=id_column_name) # call function
     
     print(paste("Writing csv file to disk... Output path: ", output_path))
