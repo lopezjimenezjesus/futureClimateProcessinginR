@@ -167,120 +167,124 @@ print(variables)
 print(models)
 ```
 
-Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los datos. Definimos una función que permita procesar todos los escenarios posibles. Queremos la media de todas las variables bioclimáticas entre modelos, es decir, la media de la banda 1 para todos los modelos, la media de la banda 2, hasta la banda 19. Finalmente usamos el grid para Extremadura para extraer la media de los valores obtenidos para esa zona en cada cuadrícula y generamos una tabla en formato csv como resultado.
+Una vez descargados los datos bioclimáticos, comenzamos el procesamiento de los datos.
 
 ```{r}
 
-reduceBioExt <-  function(tiff_file_list, area_of_interest, crop_area, tiff_ouput=FALSE) {
+# Do not use, better to export first to tiff and then to csv (see next function)
 
-  datalist = vector("list", length = 19)
-  y <- area_of_interest
-  m <- list()
-  
-  for (n in seq(1:19)) {
-    
-    print(paste("processing band", n, "of a total of 19"))
-    
-    x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
-    
-    xx <-  terra::app(rast(x), mean)
-    
-    if(tiff_ouput) {
-      # new, in case the raster are required
-      m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
-    }
-
-    z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
-    
-    col_name = paste0("band_", n)
-    df <- data.frame(col_name=z)
-    
-    datalist[[n]] = df
-    
-  }
-  
-  df_bio = do.call(cbind, datalist)
-  colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", x)})
-  df_bio <- cbind(area_of_interest$ID1KM, df_bio)
-  colnames(df_bio)[1] <- "ID1KM"
-  
-  if(tiff_ouput) {
-    names(m) <- paste0("wc2_", seq(1, 19))
-    return(list(df_bio, m)) # return a list wit both results (require gsubfn package)
-  } else {
-    return(df_bio)
-  }
-
-  
-} 
+# reduceBioExt <-  function(tiff_file_list, area_of_interest, crop_area, tiff_ouput=FALSE) {
+# 
+#   datalist = vector("list", length = 19)
+#   y <- area_of_interest
+#   m <- list()
+#   
+#   for (n in seq(1:19)) {
+#     
+#     print(paste("processing band", n, "of a total of 19"))
+#     
+#     x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
+#     
+#     xx <-  terra::app(rast(x), mean)
+#     
+#     if(tiff_ouput) {
+#       # new, in case the raster are required
+#       m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
+#     }
+# 
+#     z = exact_extract( raster::raster(xx), y , fun = "mean") # convert to raster and extract mean value from the provided grid
+#     
+#     col_name = paste0("band_", n)
+#     df <- data.frame(col_name=z)
+#     
+#     datalist[[n]] = df
+#     
+#   }
+#   
+#   df_bio = do.call(cbind, datalist)
+#   colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", x)})
+#   df_bio <- cbind(area_of_interest$ID1KM, df_bio)
+#   colnames(df_bio)[1] <- "ID1KM"
+#   
+#   if(tiff_ouput) {
+#     names(m) <- paste0("wc2_", seq(1, 19))
+#     return(list(df_bio, m)) # return a list wit both results (require gsubfn package)
+#   } else {
+#     return(df_bio)
+#   }
+# 
+#   
+# } 
 
 ```
 
 ```{r}
 
-# set variables
+# for above function, do not run
 
-shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
-extremadura <- st_as_sf(vect(shp_path))
-
-crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
-
-res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-
-tiff_output <- TRUE # TRUE if tiff files are required instead of just csv
-ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
-time_periods <- c("2021-2040") # one by one, overwrite previous
-
-# loop over every scenario for the time periods selected
-
-for (scenario in ssp) {
-  folder_path = here(path, period, scenario, res_folder_to_process)
-  tif_files <- list.files(path=folder_path,
-                          pattern="\\.tif(f)?$", full.names=TRUE)
-  print(paste("The data folder", folder_path, "contains the following files:"))
-  
-  for (f in tif_files) print(f)
-  
-  output_path = here(folder_path, "output")
- 
-  dir.create(output_path,  recursive = TRUE)
-  
-  if(tiff_output) {
-          
-    list[result, result_tif] <- reduceBioExt(tif_files, 
-                                             extremadura, 
-                                             tiff_ouput=TRUE) # return 2 values
-    
-    print(paste("Writing csv file to disk... Output path: ", output_path))
-    write.csv(result,
-              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-                            period,"_", scenario, ".csv"))
-    
-    print(paste("Writing tiff file to disk... Output path: ", output_path))
-    terra::writeRaster(x =terra::rast(result_tif),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
-    
-  }  else {
-    
-      result <- reduceBioExt(tif_files, extremadura)
-      print(paste("Writing csv file to disk... Output path: ", output_path))
-      write.csv(result,
-                file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-                              period,"_", scenario, ".csv"))
-  }
-
-}
+# # set variables
+# 
+# shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
+# extremadura <- st_as_sf(vect(shp_path))
+# 
+# crop_area <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp")))
+# 
+# res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+# 
+# tiff_output <- TRUE # TRUE if tiff files are required instead of just csv
+# ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
+# time_periods <- c("2021-2040") # one by one, overwrite previous
+# 
+# # loop over every scenario for the time periods selected
+# 
+# for (scenario in ssp) {
+#   folder_path = here(path, period, scenario, res_folder_to_process)
+#   tif_files <- list.files(path=folder_path,
+#                           pattern="\\.tif(f)?$", full.names=TRUE)
+#   print(paste("The data folder", folder_path, "contains the following files:"))
+#   
+#   for (f in tif_files) print(f)
+#   
+#   output_path = here(folder_path, "output")
+#  
+#   dir.create(output_path,  recursive = TRUE)
+#   
+#   if(tiff_output) {
+#           
+#     list[result, result_tif] <- reduceBioExt(tif_files, 
+#                                              extremadura, 
+#                                              tiff_ouput=TRUE) # return 2 values
+#     
+#     print(paste("Writing csv file to disk... Output path: ", output_path))
+#     write.csv(result,
+#               file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+#                             period,"_", scenario, ".csv"))
+#     
+#     print(paste("Writing tiff file to disk... Output path: ", output_path))
+#     terra::writeRaster(x =terra::rast(result_tif),filename = paste0(output_path, "/", "cmip6_ext_2_5m_",period,"_", scenario, ".tiff"))
+#     
+#   }  else {
+#     
+#       result <- reduceBioExt(tif_files, extremadura)
+#       print(paste("Writing csv file to disk... Output path: ", output_path))
+#       write.csv(result,
+#                 file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+#                               period,"_", scenario, ".csv"))
+#   }
+# 
+# }
 
 
 ```
 
-here dev: split functions, first export to tiff, then use the tiff to export to csv
+Definimos una función que permita procesar todos los escenarios posibles. Queremos la media de todas las variables bioclimáticas entre modelos, es decir, la media de la banda 1 para todos los modelos, la media de la banda 2, hasta la banda 19. Finalmente usamos el grid para Extremadura y España (1km y 10km) para extraer la media de los valores obtenidos para esa zona en cada cuadrícula.
 
 ```{r}
 
 stack_crop_raster <-  function(tiff_file_list, crop_area) {
-
+  
   datalist = vector("list", length = 19)
-
+  
   m <- list()
   
   for (n in seq(1:19)) {
@@ -288,17 +292,18 @@ stack_crop_raster <-  function(tiff_file_list, crop_area) {
     print(paste("processing band", n, "of a total of 19"))
     
     x <- lapply(tiff_file_list, function(x) rast(x, lyrs=n)) # extract layer n from every raster in the list
-    xx <-  terra::app(rast(x), mean)
-    m[[n]] <- xx |> crop(crop_area, snap='out') |> mean() |> mask(crop_area)
+    
+    m[[n]] <- rast(x) |> crop(crop_area, snap='out')  |> mean() |> mask(crop_area) # convert list of rater to raster, crop and mean
   }
-
-    return(m)
-
   
-} 
+  return(m)
+  
+  
+}
+ 
 ```
 
-Loop stack_crop_raster
+Guardamos los resultados en formato tiff.
 
 ```{r}
 
@@ -315,7 +320,9 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
       
       for (f in tif_files) print(f) # list files
       
-      output_path = here(folder_path, "output")
+      crop_area_prefix <- deparse(substitute(ext)) # change accrodingly
+      
+      output_path = here(folder_path, "output", crop_area_prefix) # 
      
       dir.create(output_path,  recursive = TRUE)
       
@@ -324,7 +331,7 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
       print(paste("Writing tiff file to disk... Output path: ", output_path))
       
       res_prefix <- gsub(pattern = "\\.", "_", res_folder_to_process)
-      crop_area_prefix <- deparse(substitute(ext)) # change accrodingly
+
       
       terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_", crop_area_prefix, "_", res_prefix, "_period","_", scenario, ".tiff"))
     }
@@ -339,19 +346,20 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
 # set variables
 
 path <-  here("data", "cmip6")
-
-ext <-  st_as_sf(vect(here('data', 'input', "extremadura_limites.shp"))) # better use a 3 character var as it is included in the file
-
-res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-
+ext1KM <-  st_as_sf(vect(here('data', 'input', "cUTM1KMExt_eps4326.shp"))) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
+res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
 ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
-time_periods <- c("2021-2040") # one by one, overwrite previous
+time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
 
+# run function
 
-saveRasterToDisk(time_periods, ssp, res_folder_to_process, path, ext)
+saveRasterToDisk(time_periods, ssp, res_folder_to_process, path, ext1KM)
 ```
 
+A partir de los tiff generados exportamos a formato csv.
+
 ```{r}
+
 reduceExportToCSV <- function(raster_file, spatial_grid, id_column_name) {
 
   result <- exact_extract( raster::stack(foo), spatial_grid , fun = "mean")
@@ -366,33 +374,47 @@ reduceExportToCSV <- function(raster_file, spatial_grid, id_column_name) {
 
 ```{r}
 
-shp_path <- here('data', 'input', "cUTM1KMExt_eps4326.shp")
-extremadura <- st_as_sf(vect(shp_path))
-res_folder_to_process <- "wc2.1_2.5m" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+# set variables
 
+ext1KM <-  st_as_sf(vect(here('data', 'input', "cUTM1KMExt_eps4326.shp"))) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
+res_folder_to_process <- "wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
 ssp <-  c("126", "245", "370","585") # socioeconomic scenerarios
 time_periods <- c("2021-2040") # one by one, overwrite previous
-
+crop_area_prefix <- deparse(substitute(ext1KM)) # change accrodingly
+id_column_name <- paste0("ID", substr(crop_area_prefix, 4, nchar(crop_area_prefix)))
 # loop over every scenario for the time periods selected
+
 for (period in time_periods) {
   for (scenario in ssp) {
-    folder_path = here(path, period, scenario, res_folder_to_process, "output") # here include output folder 
+    folder_path = here(path, 
+                       period, 
+                       scenario, 
+                       res_folder_to_process, 
+                       "output", 
+                       crop_area_prefix) # here include output folder
+    
     tif_files <- list.files(path=folder_path,
-                            pattern="\\.tif(f)?$", full.names=TRUE) # should be just one tif per folder in this case
+                            pattern="\\.tif(f)?$", 
+                            full.names=TRUE) # should be just one tif per folder
+    
     print(paste("The data folder", folder_path, "contains the following file:"))
     
     for (f in tif_files) print(f) # list files
     
-      output_path = output_path # just lazy
-      
-      result <- reduceExportToCSV(tif_files, spatial_grid=extremadura, id_column_name="ID1KM") # call function
-      print(paste("Writing csv file to disk... Output path: ", output_path))
-      write.csv(result,
-                file = paste0(output_path, "/", "cmip6_ext_2_5m_",
-                                period,"_", scenario, ".csv"))
+    output_path = output_path # just lazy
+    
+    result <- reduceExportToCSV(tif_files, 
+                                spatial_grid=extremadura, 
+                                id_column_name=id_column_name) # call function
+    
+    print(paste("Writing csv file to disk... Output path: ", output_path))
+    write.csv(result,
+              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+                              period,"_", scenario, ".csv"))
         
-  }
-}
+  } # end for scenario
+} # end for period
+
 ```
 
 ## Resultado
