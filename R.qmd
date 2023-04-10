@@ -81,6 +81,8 @@ variables <- "bioc" # currently hardcoded in the function
 res <- 0.5
 path <-  here("data", "cmip6")
 
+ssp <-  c("126")
+time_periods <- c("2041-2060")
 
 lon <- -6.15
 lat <- 39.2
@@ -189,6 +191,8 @@ stack_crop_raster <-  function(tiff_file_list, crop_area) {
     m[[n]] <- rast(x) |> crop(crop_area, snap='out')  |> mean() |> mask(crop_area) # convert list of rater to raster, crop and mean
   }
   
+  names(m) <- c("wc2_1" , "wc2_2",  "wc2_3" , "wc2_4",  "wc2_5",  "wc2_6",  "wc2_7",  "wc2_8" , "wc2_9",  "wc2_10" ,"wc2_11", "wc2_12", "wc2_13" ,"wc2_14" ,"wc2_15", "wc2_16", "wc2_17", "wc2_18", "wc2_19")
+  
   return(m)
   
 }
@@ -248,8 +252,8 @@ A partir de los tiff generados exportamos a formato csv.
 
 reduceExportToCSV <- function(raster_file, spatial_grid, id_column_name) {
 
-  result <- exact_extract( raster::stack(foo), spatial_grid , fun = "mean")
-  colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", result)})
+  result <- exact_extract( raster::stack(raster_file), spatial_grid , fun = "mean")
+  #colnames(df_bio) <- sapply(X = seq(1:19), function(x) {paste0("band_", result)})
   result <- cbind(spatial_grid[[id_column_name]], result)
   colnames(result)[1] <-id_column_name
   return(result)
@@ -281,15 +285,15 @@ for (period in time_periods) {
     
     for (f in tif_files) print(f) # list files
     
-    output_path = output_path # just lazy
+    output_path = folder_path
     
-    result <- reduceExportToCSV(tif_files=tif_files, 
+    result <- reduceExportToCSV(tif_files, 
                                 spatial_grid=ext1KM, 
                                 id_column_name=id_column_name) # call function
     
     print(paste("Writing csv file to disk... Output path: ", output_path))
     write.csv(result,
-              file = paste0(output_path, "/", "cmip6_ext_2_5m_",
+              file = paste0(output_path, "/", "cmip6_",crop_area_prefix, "_",
                               period,"_", scenario, ".csv"))
         
   } # end for scenario
@@ -300,3 +304,19 @@ for (period in time_periods) {
 ## Resultado
 
 Para cada combinación de periodos y escenarios socioeconómicos se obtiene un archivo en formato csv con los valores promedios de los modelos climáticos globales (GCMs) para cada una de las 19 bandas que conforman las variables bioclimáticas. Además se incluye la información en formato raster para la CCAA de Extremadura.
+
+En el siguiente ejempl ose incluyen la media de los modelos para las 19 bandas bioclimáticas proyectadas para el periodo 2021-2046
+
+```{r}
+library(tidyterra)
+library(ggplot2)
+rast <- terra::rast(x = "data/cmip6/2021-2040/126/wc2.1_2.5m/output/cmip6_ext_2_5m_2021-2040_126.tiff")
+
+
+names(rast) <- c("wc2_1" , "wc2_2",  "wc2_3" , "wc2_4",  "wc2_5",  "wc2_6",  "wc2_7",  "wc2_8" , "wc2_9",  "wc2_10" ,"wc2_11", "wc2_12", "wc2_13" ,"wc2_14" ,"wc2_15", "wc2_16", "wc2_17", "wc2_18", "wc2_19")
+
+plot(rast)
+
+
+
+```
