@@ -228,14 +228,17 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
         
       print(paste("Writing tiff file to disk... Output path: ", output_path))
       
-      res_prefix <- gsub(pattern = "\\.", "_", res_folder_to_process)
-
-      terra::writeRaster(x =terra::rast(result),filename = paste0(output_path, "/", "cmip6_", crop_area_prefix, "_", res_prefix, "_period","_", scenario, ".tiff"))
-      
-    }
-    
+      terra::writeRaster(x =terra::rast(result),
+                         filename = paste0(output_path, "/",                  
+                                           res_folder_to_process,
+                                           "_bioc_",
+                                           "ssp",scenario, "_",
+                                           period,
+                                           "_",
+                                           crop_area_prefix,
+                                           ".tiff"))
+      }
   }
-  
 }
 
 ```
@@ -293,8 +296,15 @@ for (period in time_periods) {
     
     print(paste("Writing csv file to disk... Output path: ", output_path))
     write.csv(result,
-              file = paste0(output_path, "/", "cmip6_",crop_area_prefix, "_",
-                              period,"_", scenario, ".csv"))
+              file = paste0(output_path, "/",                  
+                                           res_folder_to_process,
+                                           "_bioc_",
+                                           "ssp",scenario, "_",
+                                           period,
+                                           "_",
+                                           crop_area_prefix,
+                                           ".csv"))
+    
         
   } # end for scenario
 } # end for period
