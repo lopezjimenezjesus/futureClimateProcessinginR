@@ -76,24 +76,23 @@ models <- c("CNRM-CM6-1", "BCC-CSM2-MR", "CNRM-ESM2-1",
             "CanESM5", "IPSL-CM6A-LR",  "MIROC-ES2L",
             "MIROC6",  "MRI-ESM2-0")
 ssp <-  c("126", "245", "370","585")
+#ssp <-  c("126")
 time_periods <- c("2021-2040", "2041-2060", "2061-2080", "2081-2100")
 variables <- "bioc" # currently hardcoded in the function
 res <- 0.5
 path <-  here("data", "cmip6")
 
-#ssp <-  c("126")
-time_periods <- c("2021-2040")
 
-lon <- -6.15
+time_periods <- c("2081-2100")
+
+lon <- -6.15 # just for tiles
 lat <- 39.2
 
-ext10KM <-  st_transform(st_as_sf(vect(here('data', 'input', 'CUTM10', "CUTM10.shp"))), crs=4326) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
+ext10KM<-  st_transform(st_as_sf(vect(here('data', 'input','CUTM10', 'CUTM10.shp'))), crs=4326) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
 
 res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
 
 crop_area_prefix <- deparse(substitute(ext10KM)) # change accrodingly
-
-# id_column <- paste0("ID", substr(crop_area_prefix, 4, nchar(crop_area_prefix)))
 
 id_column <- "CUADRICULA" # vector grid id column
 id_column_name <- "ID10KM" # rename column name
@@ -250,7 +249,6 @@ saveRasterToDisk <- function(time_periods, ssp, res_folder_to_process, path, ext
 
 ```{r}
 
-
 saveRasterToDisk(time_periods, ssp, res_folder_to_process, path, ext10KM)
 ```
 
@@ -321,7 +319,7 @@ for (period in time_periods) {
 
 Para cada combinación de periodos y escenarios socioeconómicos se obtiene un archivo en formato csv con los valores promedios de los modelos climáticos globales (GCMs) para cada una de las 19 bandas que conforman las variables bioclimáticas. Además se incluye la información en formato raster para la CCAA de Extremadura.
 
-En el siguiente ejempl ose incluyen la media de los modelos para las 19 bandas bioclimáticas proyectadas para el periodo 2021-2046
+En el siguiente ejemplo se incluyen la media de los modelos para las 19 bandas bioclimáticas proyectadas para el periodo 2021-2046
 
 ```{r}
 library(tidyterra)
