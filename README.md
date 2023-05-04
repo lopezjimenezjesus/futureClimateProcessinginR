@@ -15,8 +15,8 @@ Also there are several custom variables.
 
 
 
-ext10KM<-  st_transform(st_as_sf(vect(here('data', 'input','CUTM10', 'CUTM10.shp'))), crs=4326) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
-res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
-crop_area_prefix <- "" # change accrodingly
-id_column <- "CUADRICULA" # vector grid id column
-id_column_name <- "ID10KM" # rename column name
+        ext10KM<-  st_transform(st_as_sf(vect(here('data', 'input','CUTM10', 'CUTM10.shp'))), crs=4326) # change name of variable accordingly to save raster to disk (eg.: ext, esp...+ nKM)
+        res_folder_to_process <-"wc2.1_30s" # folder with resolution to process ( "wc2.1_2.5m" or  "wc2.1_30s")
+        crop_area_prefix <- "" # change accrodingly
+        id_column <- "CUADRICULA" # vector grid id column
+        id_column_name <- "ID10KM" # rename column name
